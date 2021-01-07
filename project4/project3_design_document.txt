@@ -1,0 +1,186 @@
+                    +---------------------------+
+        |   CS 140    |
+        | PROJECT 3: VIRTUAL MEMORY |
+        |    DESIGN DOCUMENT  |
+        +---------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+Kwon Sangmin <ckasd456@unist.ac.kr>
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+      PAGE TABLE MANAGEMENT
+      =====================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+struct page_table_entry{
+int mapid -> indicate mapid
+struct file* Ref_file -> pointer for open file
+off_t ofs -> file offset
+uint32_t read_bytes -> how many bytes should be read
+uint32_t zero_byte -> how many bytes should filled with 0
+bool writable; -> indicate it is writable or not
+bool is_loaded; -> indicate this page is loaded on RAM or not
+int swapped -> indicate is it swaped out or not
+struct hash_elem h_elem; -> for hash elem
+struct list_elem elem; -> for list elem
+void* addr; -> indicate page address
+struct frame_entry* kaddr; -> indicate frame address
+bool stack_; -> indicate is it stack or not
+}
+---- ALGORITHMS ----
+
+>> A2: In a few paragraphs, describe your code for locating the frame,
+>> if any, that contains the data of a given page.
+I store all the data of a page to supplement page table by changing load_segment function().
+And, when it is required to load on RAM i loaded on the RAM by using supplement page
+>> A3: How does your code coordinate accessed and dirty bits between
+>> kernel and user virtual addresses that alias a single frame, or
+>> alternatively how do you avoid the issue?
+My pintos program page table is mapped with a frame. And, supplement page table entry has the data about is this page can be writable or not.
+---- SYNCHRONIZATION ----
+
+>> A4: When two user processes both need a new frame at the same time,
+>> how are races avoided?
+Actually, there is no way they request a new frame at really the same time because pintos can execute only one process at the time.
+So, If there are a free frame, then just allocate that frame. If there are no free frame, then some page will be swaped out to swap disk and then allocate the frame to new page.
+
+---- RATIONALE ----
+
+>> A5: Why did you choose the data structure(s) that you did for
+>> representing virtual-to-physical mappings?
+I just want to maximize using original code. So, I just simply change load_segment to just storing data, and then page_fault() handler call actual load function. 
+           PAGING TO AND FROM DISK
+           =======================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+    struct hash supple_page -> each process has supple_page table
+    void* esp; -> esp pointer
+    void*** k_esp ->kernel esp pointer
+    int stack_num; -> the number of stack expand
+
+---- ALGORITHMS ----
+
+>> B2: When a frame is required but none is free, some frame must be
+>> evicted.  Describe your code for choosing a frame to evict.
+I choose the evicted frame with pagedir_is_accessed() function. if the page's accessed bit is 0, then evict the frame.
+if the's accessed bit is 1, then just flip the value.
+>> B3: When a process P obtains a frame that was previously used by a
+>> process Q, how do you adjust the page table (and any other data
+>> structures) to reflect the frame Q no longer has?
+I deallocate the frame by using the function palloc_free_page() and pagedir_clear_page(). And, I delete the frame_table_entry from frame_table.
+>> B4: Explain your heuristic for deciding whether a page fault for an
+>> invalid virtual address should cause the stack to be extended into
+>> the page that faulted.
+if fault_addr is larger than last process esp-PGSIZE, and stack size is less than 8MB, then i extend stack size
+---- SYNCHRONIZATION ----
+
+>> B5: Explain the basics of your VM synchronization design.  In
+>> particular, explain how it prevents deadlock.  (Refer to the
+>> textbook for an explanation of the necessary conditions for
+>> deadlock.)
+Deadlock should be non-preemptive, circular wating, mutual exclusion, and hold and wait.
+But my pintos use palloc_get_page() function to get free frame, So, their cant be hold and wait.
+Because, if a frame is allocated, then palloc_get_page() never return the frame
+>> B6: A page fault in process P can cause another process Q's frame
+>> to be evicted.  How do you ensure that Q cannot access or modify
+>> the page during the eviction process?  How do you avoid a race
+>> between P evicting Q's frame and Q faulting the page back in?
+It can be solved by making the critical section. by doing this P or Q must wait for other process complete the job
+>> B7: Suppose a page fault in process P causes a page to be read from
+>> the file system or swap.  How do you ensure that a second process Q
+>> cannot interfere by e.g. attempting to evict the frame while it is
+>> still being read in?
+It can be solved by making the critical section. by doing this P or Q must wait for other process complete the job
+>> B8: Explain how you handle access to paged-out pages that occur
+>> during system calls.  Do you use page faults to bring in pages (as
+>> in user programs), or do you have a mechanism for "locking" frames
+>> into physical memory, or do you use some other design?  How do you
+>> gracefully handle attempted accesses to invalid virtual addresses?
+I just use page_fault() function, so if the addresses is kernel area and user process want to accesses the area it will call exit(-1)
+the other cases will try to load on frame
+---- RATIONALE ----
+
+>> B9: A single lock for the whole VM system would make
+>> synchronization easy, but limit parallelism.  On the other hand,
+>> using many locks complicates synchronization and raises the
+>> possibility for deadlock but allows for high parallelism.  Explain
+>> where your design falls along this continuum and why you chose to
+>> design it this way.
+
+It is very difficult to solve deadlock problems in the operating system. Therefore, i will assume a deadlock does not exist, and i will use a single lock to solve the synchronization problem.
+       MEMORY MAPPED FILES
+       ===================
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+struct memory_map_entry
+{
+  int mapid; -> indicate mapid
+  struct file* file; -> Reference file
+  struct list_elem mm_elem; -> memory_elem
+  struct list supple_page_list;  -> list of mapped page
+};
+struct list memory_map_list; -> each process has memory_map_table
+---- ALGORITHMS ----
+
+>> C2: Describe how memory mapped files integrate into your virtual
+>> memory subsystem.  Explain how the page fault and eviction
+>> processes differ between swap pages and other pages.
+i just use same method for supplement page table, and additionally make a list which is related to memory mapped file supplement page table entry.
+
+>> C3: Explain how you determine whether a new file mapping overlaps
+>> any existing segment.
+i use file_reopen function. So, Eventhough the file is closed or opened or removed. i can read and write to the file. 
+---- RATIONALE ----
+
+>> C4: Mappings created with "mmap" have similar semantics to those of
+>> data demand-paged from executables, except that "mmap" mappings are
+>> written back to their original files, not to swap.  This implies
+>> that much of their implementation can be shared.  Explain why your
+>> implementation either does or does not share much of the code for
+>> the two situations.
+first, memory map should use file_reopen function
+second, memory map pages should be tracked by memory map list
+         SURVEY QUESTIONS
+         ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?

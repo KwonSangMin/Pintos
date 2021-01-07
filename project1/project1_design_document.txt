@@ -1,0 +1,87 @@
+      +--------------------+
+      |        CS 140      |
+      | PROJECT 1: THREADS |
+      |   DESIGN DOCUMENT  |
+      +--------------------+
+           
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+Kwon Sangmin <ckasd465@unist.ac.kr>
+FirstName LastName <email@domain.example>
+FirstName LastName <email@domain.example>
+FirstName LastName <email@domain.example>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+           ALARM CLOCK
+           ===========
+
+---- DATA STRUCTURES ----
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+1. thread.h
+function : bool is_idle(struct thread*); // to check is this thread idle() at timer_sleep
+strcut thread member : int64_t sleep_start // to save the ticks which is started
+                       int64_t period_sleep // to save the ticks how long times should be blocked at least
+
+3. timer.c
+global static variable : static int sleep_num=0; // to save the number how many threads are sleeping now 
+global static struct list : static struct list sleep_list; // to save the threads which are sleeping.
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe what happens in a call to timer_sleep(),
+>> including the effects of the timer interrupt handler.
+if timer_sleep is called, then the thread which call timer_sleep save the start ticks and finish ticks. then, to avoid busy waiting, i should remove the thread in ready_list.
+So, In order to avoid unnecessary exception and error-handling, i decided to use the function thread_block() which is defined at thread.c.
+The thread_block() function requires interrupt off as a prerequisite before execution. So, i turn off interrupt and restore initial interrupt level before return.
+And i block the thread, append the thread to sleep_list and increase sleep_num to easily find the blocked threads for enough time.
+
+>> A3: What steps are taken to minimize the amount of time spent in
+>> the timer interrupt handler?
+Keep the sleep_list separately to reduce unnecessary thread searches. If the sleep_list is empty, do not perform a sleep_list search. 
+
+---- RATIONALE ----
+
+>> A6: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+Rather than defining a new function, i tried to reduce unnecessary exception-handling and error by using a function defined in Pintos.
+i wanted to use the existing all_list to reduce memory occupancy, but the static declaration made it impossible to refer in the timer.c. As a result, i tried to manage the thread that is sleeping through the array separately.
+after the thread go back to ready_list, removing it from the array, and refilling it from the beginninI also thought about putting it in ascending order when inserted into the sleep_list and referring to only the first element, but I did not do this project because I thought it was unnecessary in this project, which deals with only a small number of threadsg was complicated, so i made the sleep_list  and mana,ged through the list function defined in Pintos.
+and, In order to wake up blocked threads for enough time, i searched all the sleep_list elements by comparing timer_ticks()-sleep_start and period_sleep.
+I also thought about putting it in ascending order when inserted into the sleep_list and referring to only the first element, but I did not do this project because I thought it was unnecessary in this project, which deals with only a small number of threads
+
+       PRIORITY SCHEDULING
+       ===================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+thread.c
+function : bool cmp_priority(const struct list_elem*, const struct list_elem* b, void* aux) // i defined this function to use as a list_lless_func. this function compare thread a priority with thread b priority. if a>=b -> false, or a<b -> true
+
+---- RATIONALE ----
+
+>> B7: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+Two methods came to mind as a way to implement preempt schedule by priority.
+1. a method to arrange the ready_list in descending order according to priority, use the thread in front of the front when comparing the priority.
+2. a method to search the ready_list for max priority value and use the thread.
+The second method, which does not require modification of the existing ready_list insertion code, is thought to be a better method for exception processing and reduction of error, so i designed based on the second method.
+By using the list_max and cmp_priority functions, i can find the thread with the largest priority value in the ready_list
+thus, when create_thread function and thread_set_priority are called, i check that is running_thread have highest priority.
+If running_thread has less priority than a thread in reading_list. then, the running_thread call thread_yield() function. As a result, it make preempt schedule
